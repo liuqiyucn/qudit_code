@@ -323,31 +323,47 @@ def qubit(
     # creating the four ports for pad placement
     # canvas_qubit.add_port(name='top', center=[(boundary.dxmax+boundary.dxmin)/2, boundary.dymax - 200], width = port_width,orientation=-90, layer = (5,0))
     canvas_qubit.add_port(name='top', center=[(-1380-1220)/2, 2500-200], width = port_width,orientation=-90, layer = (5,0))
+    canvas_qubit.add_port(name='top2', center=[(1380+1220)/2, 2500-200], width = port_width,orientation=-90, layer = (5,0))
     canvas_qubit.add_port(name='right', center=[boundary.dxmax - 200, (boundary.dymax + boundary.dymin)/2], width = port_width,orientation=180, layer = (5,0))
     # canvas_qubit.add_port(name='right', center=[2500-200, (-1380-1220)/2], width = port_width,orientation=180, layer = (5,0))
     # canvas_qubit.add_port(name='bot', center=[(boundary.dxmax+boundary.dxmin)/2, boundary.dymin + 200], width = port_width,orientation=90, layer = (5,0))
     canvas_qubit.add_port(name='bot', center=[(1380+1220)/2, -2500+200], width = port_width,orientation=90, layer = (5,0))
+    canvas_qubit.add_port(name='bot2', center=[(-1380-1220)/2, -2500+200], width = port_width,orientation=90, layer = (5,0))
     canvas_qubit.add_port(name='left', center=[boundary.dxmin + 200, (boundary.dymax + boundary.dymin)/2], width = port_width,orientation=0, layer = (5,0))
     # canvas_qubit.add_port(name='left', center=[-2500+200, (1380+1220)/2], width = port_width,orientation=0, layer = (5,0))
     # pad = gf.read.import_gds(gdspath='pad.gds')
 
-    # left
+    # left pad and right pad are drive pad
+    # left 
     pad = gf.read.import_gds(gdspath='pad2.gds')
-
-
     pad.add_port('back', center=[pad.dxmin,(pad.dymax + pad.dymin)/2], layer=(5,0), width=10, orientation=180)
     pad.add_port('front', center=[pad.dxmax,(pad.dymax + pad.dymin)/2], layer = (5,0), width=10, orientation=0)
-
     left_pad = canvas_qubit << pad
     left_pad.connect("back", canvas_qubit.ports['left'], allow_layer_mismatch=True)
+
+    # right pad
+    pad = gf.read.import_gds(gdspath='pad2.gds')
+    pad.add_port('back', center=[pad.dxmin,(pad.dymax + pad.dymin)/2], layer=(5,0), width=10, orientation=180)
+    pad.add_port('front', center=[pad.dxmax,(pad.dymax + pad.dymin)/2], layer = (5,0), width=10, orientation=0)
+    right_pad = canvas_qubit << pad
+    right_pad.connect("back", canvas_qubit.ports['right'], allow_layer_mismatch=True)
+
 
     # bot
     pad = gf.read.import_gds(gdspath='bot-connector2.gds')
     pad.add_port('back', center=[pad.dxmin,(pad.dymax + pad.dymin)/2], layer=(5,0), width=10, orientation=180)
     pad.add_port('front', center=[pad.dxmax,(pad.dymax + pad.dymin)/2], layer = (5,0), width=10, orientation=0)
-    bot_pad = canvas_qubit << pad
-    bot_pad.connect("back", canvas_qubit.ports['bot'], allow_layer_mismatch=True)
+    bot_pad2 = canvas_qubit << pad
+    bot_pad2.connect("back", canvas_qubit.ports['bot'], allow_layer_mismatch=True)
 
+    pad = gf.read.import_gds(gdspath='bot-connector2.gds')
+    pad.add_port('back', center=[pad.dxmin,(pad.dymax + pad.dymin)/2], layer=(5,0), width=10, orientation=180)
+    pad.add_port('front', center=[pad.dxmax,(pad.dymax + pad.dymin)/2], layer = (5,0), width=10, orientation=0)
+    bot_pad = canvas_qubit << pad
+    bot_pad.connect("back", canvas_qubit.ports['bot2'], allow_layer_mismatch=True)
+
+
+    # top pad
     pad = gf.read.import_gds(gdspath='pad_transmission2.gds')
 
     pad.add_port('back', center=[pad.dxmin,(pad.dymax + pad.dymin)/2], layer=(5,0), width=10, orientation=180)
@@ -355,8 +371,16 @@ def qubit(
 
     top_pad = canvas_qubit << pad
     top_pad.connect("back", canvas_qubit.ports['top'], allow_layer_mismatch=True)
-    right_pad = canvas_qubit << pad
-    right_pad.connect("back", canvas_qubit.ports['right'], allow_layer_mismatch=True)
+
+    # top pad 2
+    pad = gf.read.import_gds(gdspath='pad_transmission2.gds')
+
+    pad.add_port('back', center=[pad.dxmin,(pad.dymax + pad.dymin)/2], layer=(5,0), width=10, orientation=180)
+    pad.add_port('front', center=[pad.dxmax,(pad.dymax + pad.dymin)/2], layer = (5,0), width=10, orientation=0)
+
+    top_pad2 = canvas_qubit << pad
+    top_pad2.connect("back", canvas_qubit.ports['top2'], allow_layer_mismatch=True)
+
 
     ######################################
     # pad added
@@ -375,17 +399,18 @@ def qubit(
     y_pos2 = resonator_ymax + tranmission_width/2 + tranmission_tunnel_width + tranmission_resonator_offset
 
     top_initial_x = (-1380-1220)/2
+    top_final_x = (1380+1220)/2
 
     route_inner = gf.routing.route_single_from_steps(
         inner, 
         port1 = top_pad.ports['front'],
-        port2 = right_pad.ports['front'],
+        port2 = top_pad2.ports['front'],
         allow_width_mismatch = False,
         cross_section = xs_1,
         steps = [
             {"x": top_initial_x, "y": y_pos2},
-            {"x": 1500, "y": y_pos2},
-            {"x": 1500, "y": 0},
+            # {"x": 1500, "y": y_pos2},
+            {"x": top_final_x, "y": y_pos2},
         ],
         radius = route_radius,
     )
@@ -393,13 +418,13 @@ def qubit(
     route_outer = gf.routing.route_single_from_steps(
         outer, 
         port1 = top_pad.ports['front'],
-        port2 = right_pad.ports['front'],
+        port2 = top_pad2.ports['front'],
         allow_width_mismatch = False,
         cross_section = xs_2,
         steps = [
             {"x": top_initial_x, "y": y_pos2},
-            {"x": 1500, "y": y_pos2},
-            {"x": 1500, "y": 0},
+            # {"x": 1500, "y": y_pos2},
+            {"x": top_final_x, "y": y_pos2},
         ],
         radius = route_radius,
     )
@@ -584,6 +609,8 @@ def qubit(
        (jj_ref1.dxmax + jj_ref2.dxmin)/2 - top_rectangle_ref_center[0] ,
        jj_ref1.dymin - bot_rectangle_ref.dymax
     ))
+
+
 
 
     sss = canvas_qubit.extract(layers=((1,0)))

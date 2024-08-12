@@ -1,4 +1,4 @@
-from qudit import *
+from qudit_coupled_august import *
 import pya
 from kfactory.kcell import cell, save_layout_options
 qubit = qubit(
@@ -101,4 +101,4 @@ def write(qubit, is_DRC=True):
         # final.write_gds('/Users/qiyu/Documents/gds-folder/QUDIT_6GHz.gds', save_options=options)
 
 
-write(qubit, is_DRC=True)
+write(qubit, is_DRC=False)
