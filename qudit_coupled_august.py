@@ -30,6 +30,12 @@ def xmon(xmon_length , xmon_width, xmon_spacing, drive_spacing, flux_spacing):
                         orientation = 0,
                         layer = (5,0)
                         )
+    xmon.add_port(name = 'drive2', 
+                        center = [(xmon.dxmax + drive_spacing), (xmon.dymin+xmon.dymax)/2], # this needs to be changed later
+                        width = 11,
+                        orientation = 180,
+                        layer = (5,0)
+                        )
     return xmon
 
 def resize(shape, size):
@@ -103,7 +109,7 @@ def create_resonator(length, radius, number_of_cycle):
     P += gf.path.straight(length = 180)
     return P.dmirror((1,0))
 
-def resonator(epsilon_eff, frequency = 6.7e9, length = 300, radius = 30, air_bridge_flag = True, top_connector_depth = 80):
+def resonator(epsilon_eff, top_connector_depth, frequency = 6.7e9, length = 300, radius = 30, air_bridge_flag = True,  ):
     resonator_length_theory = calculate_resonator_length(epsilon_eff, frequency)*1e6
     number_of_cycle = 5
     Path = create_resonator(length, radius, number_of_cycle)
@@ -268,9 +274,11 @@ def qubit(
 
         top_connector_depth = 90,
         resoantor_length = 300,
+        coupled_spacing = 10,
 ):
     unit_convert = 1e3
 
+    qubit_spacing = coupled_spacing + xmon_length + 2*xmon_spacing
     # main canvas that holds everything
     canvas_qubit = gf.Component()
 
@@ -278,8 +286,9 @@ def qubit(
     # after creating resonator and deleting the middle piece, the gf.boolean Component will be added to main canvas
     # this serve to hold only the positional information relative to the xmon placement
     d = gf.Component() # temporary canvas for storing intermediate Component
-    top_connector, top_connector_depth = top_connector_mod(connector_length=2*xmon_spacing+xmon_width+2*readout_connector_spacing, connector_depth=top_connector_depth, metal_spacing=readout_connector_metal_spacing, size = readout_tunnel_width)
+    top_connector, top_connector_depth1 = top_connector_mod(connector_length=2*xmon_spacing+xmon_width+2*readout_connector_spacing, connector_depth=top_connector_depth, metal_spacing=readout_connector_metal_spacing, size = readout_tunnel_width)
     top_ref = d << top_connector
+    
 
     # creating xmon
     drive_spacing = drive_port_spacing
@@ -291,7 +300,7 @@ def qubit(
     dy = xmon_ref.dymax  - top_ref.dymax
     top_ref.dmove([dx, dy + readout_tunnel_width * 2 + readout_connector_metal_spacing + readout_connector_spacing])
 
-    my_resonator = resonator(epsilon_eff, top_connector_depth=top_connector_depth, length=resoantor_length)
+    my_resonator = resonator(epsilon_eff, top_connector_depth=top_connector_depth1, length=resoantor_length)
     resonator_ref = canvas_qubit << my_resonator
     resonator_ref.dmove((get_center(top_ref) - get_center(resonator_ref)))
     resonator_ref.dmove([0, top_ref.dymax - resonator_ref.dymin-5])
@@ -312,6 +321,55 @@ def qubit(
     remain = gf.boolean(top_ref, rec_ref, '-', layer=(5,0))
     remain_ref = canvas_qubit << remain
     
+
+
+
+
+
+
+
+
+    # second qudits
+    d = gf.Component() # temporary canvas for storing intermediate Component
+    top_connector2, top_connector_depth2 = top_connector_mod(connector_length=2*xmon_spacing+xmon_width+2*readout_connector_spacing, connector_depth=top_connector_depth, metal_spacing=readout_connector_metal_spacing, size = readout_tunnel_width)
+    top_ref2 = d << top_connector2
+
+    # creating xmon
+    drive_spacing = drive_port_spacing
+    flux_spacing = flux_port_spacing 
+    xmon_ref2 = canvas_qubit << xmon(xmon_length=xmon_length, xmon_width=xmon_width, xmon_spacing=xmon_spacing, drive_spacing=drive_spacing, flux_spacing=flux_spacing)
+
+    # moving top connector to correct position
+    dx = (xmon_ref2.dxmax + xmon_ref2.dxmin)/2 - (top_ref2.dxmax + top_ref2.dxmin)/2
+    dy = xmon_ref2.dymax  - top_ref2.dymax
+    top_ref2.dmove([dx, dy + readout_tunnel_width * 2 + readout_connector_metal_spacing + readout_connector_spacing])
+    xmon_ref2.dmove((qubit_spacing, 0))
+    top_ref2.dmove((qubit_spacing,0))
+
+    my_resonator2 = resonator(epsilon_eff, top_connector_depth=top_connector_depth2, length=resoantor_length)
+    resonator_ref2 = canvas_qubit << my_resonator2
+    resonator_ref2.dmove((get_center(top_ref2) - get_center(resonator_ref2)))
+    resonator_ref2.dmove([0, top_ref2.dymax - resonator_ref2.dymin-5])
+    resonator_ymax = resonator_ref2.dymax
+
+    
+    subtraction2 = gf.boolean(top_ref2, resonator_ref2, operation='and', layer=(5,0))
+    merged2 = gf.boolean(top_ref2, resonator_ref2, operation='or', layer=(5,0))
+    abc2 = gf.boolean(merged2, subtraction2, '-', layer=(5,0))
+    abc_1_2 = gf.boolean(merged2, abc2, '-', layer=(5,0))
+    temp2 = gf.Component()
+    rec2 = gf.components.rectangle(size = (10, 5), centered=True, layer=(5,0))
+    rec_ref2 = temp2 << rec2
+    rec_ref2.dmove(
+        ( - (rec_ref2.dxmin + rec_ref2.dxmax)/2 + (abc_1_2.dxmin + abc_1_2.dxmax)/2, 
+                    - (rec_ref2.dymin + rec_ref2.dxmax)/2 + (abc_1_2.dymin + abc_1_2.dymax)/2 + 1.25)
+                )
+    remain2 = gf.boolean(top_ref2, rec_ref2, '-', layer=(5,0))
+    remain_ref2 = canvas_qubit << remain2
+
+
+
+
     ######################################
     # qubit and resonator finished
     ######################################
@@ -516,8 +574,9 @@ def qubit(
     extracted.name = 'extracted'
     canvas_qubit << extracted
 
+
+    # flux line
     flux_xmon = gf.read.import_gds(gdspath='flux-xmon2.gds')
-    flux_xmon.layer
 
     flux_xmon.add_port('top', center=[(-9.5+0.5)/2, flux_xmon.dymax+1], layer=(5,0), width=10, orientation=180)
     flux_xmon.add_port('bot', center=[(-9.5+0.5)/2,flux_xmon.dymin], layer = (5,0), width=10, orientation=270)
@@ -574,6 +633,125 @@ def qubit(
     canvas_qubit << extracted
 
 
+    # flux line for second qubit
+    flux_xmon = gf.read.import_gds(gdspath='flux-xmon2.gds')
+
+    flux_xmon.add_port('top', center=[(-9.5+0.5)/2, flux_xmon.dymax+1], layer=(5,0), width=10, orientation=180)
+    flux_xmon.add_port('bot', center=[(-9.5+0.5)/2,flux_xmon.dymin], layer = (5,0), width=10, orientation=270)
+    
+    flux_xmon_ref = canvas_qubit << flux_xmon
+    flux_xmon_ref.connect("top", xmon_ref2.ports['flux'], allow_layer_mismatch=True, allow_width_mismatch=True)
+
+    inner = gf.Component()
+    outer = gf.Component()
+    xs_1 = gf.cross_section.cross_section(width=tranmission_width_flux, layer=(5,0))
+    xs_2 = gf.cross_section.cross_section(width=tranmission_width_flux + 2*tranmission_tunnel_width_flux, layer=(5,0))
+
+
+    route_inner = gf.routing.route_single(
+        inner, 
+        port1 = bot_pad2.ports['front'],
+        port2 = flux_xmon_ref.ports['bot'],
+        allow_width_mismatch = True,
+        cross_section = xs_1,
+        radius = 60,
+    )
+
+    route_outer = gf.routing.route_single(
+        outer, 
+        port1 = bot_pad2.ports['front'],
+        port2 = flux_xmon_ref.ports['bot'],
+        allow_width_mismatch = True,
+        cross_section = xs_2,
+        radius = 60,
+    )
+
+    flux_tunnel = gf.boolean(A=outer, B = inner, operation='A-B', layer=(5,0))
+    flux_tunnel_ref = canvas_qubit << flux_tunnel
+
+    bridge = gf.Component()
+    via = ComponentAlongPath(
+        component= air_bridge(22),spacing=200, padding=2, offset=0,
+    )
+    via2 = ComponentAlongPath(
+        component=gf.c.rectangle(size=(20, 20), centered=True, layer=(30,0)), spacing=200, padding=2
+    )
+    xs_3_Section = gf.Section(width=tranmission_tunnel_width_flux+2*tranmission_tunnel_width_flux, layer=(5,0), port_names=('o1', 'o2'))
+    xs_3 = gf.CrossSection(sections=[xs_3_Section], components_along_path=[via])
+    route_bridge = gf.routing.route_single(
+        bridge, 
+        port1 = bot_pad2.ports['front'],
+        port2 = flux_xmon_ref.ports['bot'],
+        allow_width_mismatch = True,
+        cross_section = xs_3,
+        radius = 60,
+    )
+    extracted = bridge.extract(layers=((30, 0), (31,0),))
+    extracted.name = 'extracted'
+    canvas_qubit << extracted
+
+
+
+    # 2nd Drive line
+    drive_xmon = gf.read.import_gds(gdspath='drive-xmon.gds')
+    drive_xmon.add_port('back', center=[drive_xmon.dxmin,(drive_xmon.dymax + drive_xmon.dymin)/2], layer=(5,0), width=10, orientation=180)
+    drive_xmon.add_port('front', center=[drive_xmon.dxmax,(drive_xmon.dymax + drive_xmon.dymin)/2], layer = (5,0), width=10, orientation=180)
+    drive_xmon_ref = canvas_qubit << drive_xmon
+    drive_xmon_ref.connect("front", xmon_ref2.ports['drive2'], allow_layer_mismatch=True, allow_width_mismatch=True)
+
+
+    inner = gf.Component()
+    outer = gf.Component()
+    bridge = gf.Component()
+    xs_1 = gf.cross_section.cross_section(width=tranmission_width_drive, layer=(5,0))
+    via = ComponentAlongPath(
+        component= air_bridge(28),spacing=100, padding=2, offset=0,
+    )
+    xs_2 = gf.cross_section.cross_section(width=tranmission_width_drive + 2*tranmission_tunnel_width_drive, layer=(5,0))
+
+    xs_3_Section = gf.Section(width=tranmission_tunnel_width_drive+2*tranmission_tunnel_width_drive, layer=(5,0), port_names=('o1', 'o2'))
+    xs_3 = gf.CrossSection(sections=[xs_3_Section], components_along_path=[via])
+
+
+    route_inner = gf.routing.route_single(
+        inner, 
+        port1 = right_pad.ports['front'],
+        port2 = drive_xmon_ref.ports['back'],
+        allow_width_mismatch = True,
+        cross_section = xs_1,
+        radius = route_radius,
+    )
+
+    route_outer = gf.routing.route_single(
+        outer, 
+        port1 = right_pad.ports['front'],
+        port2 = drive_xmon_ref.ports['back'],
+        allow_width_mismatch = True,
+        cross_section = xs_2,
+        radius = route_radius,
+    )
+    route_bridge = gf.routing.route_single(
+        bridge, 
+        port1 = right_pad.ports['front'],
+        port2 = drive_xmon_ref.ports['back'],
+        allow_width_mismatch = True,
+        cross_section = xs_3,
+        radius = route_radius,
+
+    )
+
+
+
+    drive_tunnel = gf.boolean(A=outer, B = inner, operation='A-B', layer=(5,0))
+    drive_tunnel_ref = canvas_qubit << drive_tunnel
+
+    extracted = bridge.extract(layers=((30, 0), (31,0),))
+    extracted.name = 'extracted'
+    canvas_qubit << extracted
+
+
+
+
 
 
 
@@ -609,6 +787,44 @@ def qubit(
        (jj_ref1.dxmax + jj_ref2.dxmin)/2 - top_rectangle_ref_center[0] ,
        jj_ref1.dymin - bot_rectangle_ref.dymax
     ))
+
+
+    # adding second JJ
+    extrusion = extrusion
+    jj = JJ(JJ_width, total_length=xmon_spacing)
+    jj2 = JJ(JJ_width2, total_length=xmon_spacing)
+    jj_ref1 = canvas_qubit << jj
+    jj_ref2 = canvas_qubit << jj2
+    jj_ref1.rotate(-90)
+    jj_ref2.rotate(-90)
+    jj_ref2.dmovex(20)
+    
+    jj_ref1.dmove(( 
+        0 - jj_ref1.x-10+qubit_spacing,
+        jj_ref1.dymax-xmon_length/2 - 1
+    ))
+    jj_ref2.dmove(( 
+        0 - jj_ref2.x+10+qubit_spacing,
+        jj_ref2.dymax-xmon_length/2 - 1
+    )) 
+   
+    top_rectangle = gf.components.rectangle(size=(jj_ref2.dxmax - jj_ref1.dxmin, 3), layer=(55, 0))
+    bot_rectangle = gf.components.rectangle(size=(jj_ref2.dxmax - jj_ref1.dxmin, 3), layer=(55, 0))
+    top_rectangle_ref = canvas_qubit << top_rectangle
+    bot_rectangle_ref = canvas_qubit << bot_rectangle
+    top_rectangle_ref_center = [(top_rectangle_ref.dxmax + top_rectangle_ref.dxmin)/2,(top_rectangle_ref.dymax + top_rectangle_ref.dymin)/2 ]
+    bot_rectangle_ref_center = [(bot_rectangle_ref.dxmax + bot_rectangle_ref.dxmin)/2,(bot_rectangle_ref.dymax + bot_rectangle_ref.dymin)/2 ]
+    top_rectangle_ref.dmove((
+       (jj_ref1.dxmax + jj_ref2.dxmin)/2 - top_rectangle_ref_center[0] ,
+       jj_ref1.dymax - top_rectangle_ref.dymin
+    ))
+    bot_rectangle_ref.dmove((
+       (jj_ref1.dxmax + jj_ref2.dxmin)/2 - top_rectangle_ref_center[0] ,
+       jj_ref1.dymin - bot_rectangle_ref.dymax
+    ))
+
+
+
 
 
 
